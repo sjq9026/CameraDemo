@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
@@ -18,16 +19,18 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+import static com.android.sjq.camerademo.R.id.imageView;
+
+public class MainActivity extends AppCompatActivity implements View.OnClickListener,UtilImgCompressor.CompressListener {
 
     public static final int TAKE_PHOTO = 1;
     public static final int CHOOSE_PHOTO = 2;
@@ -44,7 +47,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         take_photo_btn = (Button) findViewById(R.id.button);
-        photo_img = (ImageView) findViewById(R.id.imageView);
+        photo_img = (ImageView) findViewById(imageView);
         select_photo_btn = (Button) findViewById(R.id.button2);
         take_photo_btn.setOnClickListener(this);
         select_photo_btn.setOnClickListener(this);
@@ -70,7 +73,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
 
     private void takePhoto() {
-        File outputImg = new File(getExternalCacheDir(), "out_put_img.jpg");
+        File outputImg = new File(Environment.getExternalStorageDirectory()/*Environment.getDownloadCacheDirectory()*/, "out_put_img.jpg");
         try {
             if (outputImg.exists()) {
                 outputImg.delete();
@@ -97,12 +100,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         switch (requestCode) {
             case TAKE_PHOTO:
                 if (resultCode == RESULT_OK) {
-                    try {
-                        Bitmap bitmap = BitmapFactory.decodeStream(getContentResolver().openInputStream(img_uri));
-                        photo_img.setImageBitmap(bitmap);
-                    } catch (FileNotFoundException e) {
-                        e.printStackTrace();
-                    }
+
+//                        Bitmap bitmap = BitmapFactory.decodeStream(getContentResolver().openInputStream(img_uri));
+//                        photo_img.setImageBitmap(bitmap);
+                        UtilImgCompressor.getInstance(this).withListener(this).
+                                starCompress(img_uri.toString(), 600, 800, 50);
+
                 }
                 break;
             case CHOOSE_PHOTO:
@@ -193,5 +196,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Intent intent = new Intent("android.intent.action.GET_CONTENT");
         intent.setType("image/*");
         startActivityForResult(intent, CHOOSE_PHOTO);
+    }
+
+    @Override
+    public void onCompressStart() {
+
+    }
+
+    @Override
+    public void onCompressEnd(UtilImgCompressor.CompressResult compressResult) {
+        Log.d("TAG", "onCompressEnd outPath:" + compressResult.getOutPath());
+        if (compressResult.getStatus() == UtilImgCompressor.CompressResult.RESULT_ERROR)//压缩失败
+            return;
+
+        File file = new File(compressResult.getOutPath());
+        Bitmap bitmap = null;
+        try {
+            bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.fromFile(file));
+            photo_img.setImageBitmap(bitmap);
+            float imageFileSize = file.length() / 1024f;
+
+String str =  "image info width:" + bitmap.getWidth() + " \nheight:" + bitmap.getHeight() +
+                   " \nsize:" + imageFileSize + "kb" + "\nimagePath:" + file.getAbsolutePath();
+            Toast.makeText(this,str,Toast.LENGTH_LONG).show();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
